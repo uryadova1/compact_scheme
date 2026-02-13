@@ -5,7 +5,7 @@ from CWA_scheme import CWA
 
 
 def time_steps_count() -> int:
-    pass
+    return 120
 
 
 def periodicalU(a: float, x0: np.ndarray, X: float):
@@ -36,14 +36,14 @@ def start_compact_sceme():
 
     hu, qu, uu = init(x_start, x_end, X, n, a, b)  # n-1
     hv, qv, uv = np.zeros(n), np.zeros(n), np.zeros(n)  # n
-    hw, qw, qu = np.zeros(n), np.zeros(n), np.zeros(n)  # n+1
+    hw, qw, uw = np.zeros(n), np.zeros(n), np.zeros(n)  # n+1
 
     time_steps = time_steps_count()
 
     for t in range(time_steps):
         if t == 0:
-            hv, qv, uv = NFD(hu, qu, dt_dx=0.005)
+            hv, qv, uv = NFD(hu, qu, 0.005)
         else:
+            hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, 0.1, n) #??????????????
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, qu
-            hw, qw, qu = CWA() #??????????????

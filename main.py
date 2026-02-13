@@ -1,8 +1,9 @@
 import pycuda.driver as drv
 
+import run
 
 if __name__ == '__main__':
-    pass
+    run.start_compact_sceme()
 #     drv.init()
 #
 #     print('CUDA device query (PyCUDA version)')
