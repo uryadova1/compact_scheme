@@ -4,7 +4,8 @@ from sweep_methods import periodical_sweep_method
 
 
 def norm(hv, hw, qv, qw):
-    return (hv ** 2 - hw**2) ** (1/2) + (qv ** 2 - qw ** 2) ** (1/2)
+    return (hv ** 2 - hw ** 2) ** (1 / 2) + (qv ** 2 - qw ** 2) ** (1 / 2)
+
 
 def create_matrix(vector, N):
     test_array = np.zeros((N, N))
@@ -76,7 +77,6 @@ def CWA(hv, qv, uv, hu, qu, uu, r, N):
     right_part_q = right_part(qu, vect_qu, vect_qv, r, N)  # - g * r(
     # sum_for_right_part(hv, N))/2  # - перенесла в правую часть rg(h^(n+1)_(j+1) -h^(n+1)_(j-1))/2
 
-
     h_wk = hv
     q_wk = qv
     u_wk = uv
@@ -91,7 +91,7 @@ def CWA(hv, qv, uv, hu, qu, uu, r, N):
 
         q_wk_1 = periodical_sweep_method(u_wk, right_part_q, r, N)
 
-        if norm(hv, h_wk_1, qv, q_wk_1) < eps or k > 1000: # - пока бредик, потому что это все таки разные случаи
+        if norm(hv, h_wk_1, qv, q_wk_1) < eps or k > 1000:  # - пока бредик, потому что это все таки разные случаи
             flag = False
         k += 1
 
@@ -102,4 +102,3 @@ def CWA(hv, qv, uv, hu, qu, uu, r, N):
         u_wk = u_wk_1
 
     return h_wk, q_wk, u_wk
-
