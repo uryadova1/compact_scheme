@@ -1,6 +1,6 @@
 import numpy as np
 
-from const import g
+from const import *
 
 
 # переписать для 3
@@ -61,3 +61,34 @@ def NFD(h_n, q_n, dt_dx):
 
 
     return h_n_plus_1, q_n_plus_1, q_n_plus_1/h_n_plus_1
+
+
+def F_func(q, h):
+    return np.array(q ** 2 / h + g * h ** 2 / 2)  # приведено к виду q^2/h+gh^2/2, чтобы не использовать u
+
+def rusanov_scheme_p(h_n, q_n, R, C):
+    # вот здесь периодические условия
+    h_n = np.concatenate([[h_n[N - 3]], [h_n[N - 2]], h_n, [h_n[1]], [h_n[2]]])
+    q_n = np.concatenate([[q_n[N - 3]], [q_n[N - 2]], q_n, [q_n[1]], [q_n[2]]])
+
+    f_1 = F_func(q_n, h_n)  # задаем q^2/h+gh^2/2
+
+    h_1 = (h_n[:-1] + h_n[1:]) / 2 - R * (q_n[1:] - q_n[:-1]) / 3  # n - 1
+    q_1 = (q_n[:-1] + q_n[1:]) / 2 - R * (f_1[1:] - f_1[:-1]) / 3
+
+    f_2 = F_func(q_1, h_1)
+
+    h_2 = h_n[1:-1] - 2 / 3 * R * (q_1[1:] - q_1[:-1])
+    q_2 = q_n[1:-1] - 2 / 3 * R * (f_2[1:] - f_2[:-1])  # n-2
+
+    w_h = h_n[4:] - h_n[3:-1] * 4 + h_n[2:-2] * 6 - h_n[1:-3] * 4 + h_n[:-4]
+    w_q = q_n[4:] - q_n[3:-1] * 4 + q_n[2:-2] * 6 - q_n[1:-3] * 4 + q_n[:-4]
+
+    f_3 = F_func(q_2, h_2)
+    h_3 = h_n[2:-2] - R * (7 / 24 * (q_n[3:-1] - q_n[1:-3]) - (2 / 24) * (q_n[4:] - q_n[:-4])) - 3 / 8 * R * (
+            q_2[2:] - q_2[:-2]) - w_h * C / 24
+    q_3 = q_n[2:-2] - R * ((7 / 24) * (f_1[3:-1] - f_1[1:-3]) - (2 / 24) * (f_1[4:] - f_1[:-4])) - 3 / 8 * R * (
+            f_3[2:] - f_3[:-2]) - w_q * C / 24
+
+    return h_3, q_3, q_3/h_3
+

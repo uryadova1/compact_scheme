@@ -1,6 +1,6 @@
 import numpy as np
-from const import g
-from NFD33_scheme import NFD
+from const import *
+from NFD33_scheme import NFD, rusanov_scheme_p
 from CWA_scheme import CWA
 from datetime import datetime
 from graphics import simple_graphic
@@ -26,40 +26,42 @@ def init(x_start: int, x_end: int, X: int, n: int, a: int, b: int):
     return h, q, u, x
 
 
-def start_compact_sceme(x_start: int, x_end: int, X: int, n: int, a: int, b: int, time_steps: int, snapshot_times: list, target_time: list):
+def start_compact_sceme(time_steps: int): #N: int, time_steps: int, snapshot_times: list, target_time: list
     r = 0.05
 
-    hu, qu, uu, x = init(x_start, x_end, X, n, a, b)  # n-1
+    hu, qu, uu, x = init(x_start, x_end, X, N, a, b)  # n-1
     # simple_graphic(hu, x, 0)
-    hv, qv, uv = np.zeros(n), np.zeros(n), np.zeros(n)  # n
-    hw, qw, uw = np.zeros(n), np.zeros(n), np.zeros(n)  # n+1
+    hv, qv, uv = np.zeros(N), np.zeros(N), np.zeros(N)  # n
+    hw, qw, uw = np.zeros(N), np.zeros(N), np.zeros(N)  # n+1
 
     # time_steps = time_steps_count()
     trg_time = 0
 
     for t in range(time_steps + 1):
         if t == 0:
-            hv, qv, uv = NFD(hu, qu, r)
-        elif t in snapshot_times:
-            np.save(f"./snapshots/h_T={target_time[trg_time]}_n={n}_const_dt", hw)
-            np.save(f"./snapshots/q_T={target_time[trg_time]}_n={n}_const_dt", qw)
-            print(f"Snapshot ZZZapisan: T={target_time[trg_time]}_n={n}_const_dt")
-            trg_time += 1
+            hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 2.8) #NFD(hu, qu, r)
+        # elif t in snapshot_times:
+            # np.save(f"./check/h_T={target_time[trg_time]}_n={N}_const_dt", hw)
+            # np.save(f"./check/q_T={target_time[trg_time]}_n={N}_const_dt", qw)
+            # print(f"Snapshot ZZZapisan: T={target_time[trg_time]}_n={N}_const_dt")
+            # trg_time += 1
             # simple_graphic(hw, x, t)
 
         else:
-            hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, n)
+            hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, uw
 
 
-def three_greeds():
-    X = 10
-    a = 2
-    b = 10
-    x_start = 0
-    x_end = x_start + X
+def check():
+    T = 0.5
+    delta_h = X / (N - 1)
+    delta_t = delta_h * 0.05
+    time_steps = int(0.5 / delta_t)
+    start_compact_sceme(time_steps)
 
+
+def three_greeds():
     N = [1001, 2001, 4001]
     T = [0.5, 1, 2.5]
     r = 0.05
@@ -72,16 +74,16 @@ def three_greeds():
     snapshot_times_4 = [t / delta_t[2] for t in T]
 
     t1 = datetime.now()
-    start_compact_sceme(x_start, x_end, X, N[0], a, b, time_steps[0], snapshot_times_1, T)
+    start_compact_sceme(N[0], time_steps[0], snapshot_times_1, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[0]}-dot grid is {t2 - t1}")
 
     t1 = datetime.now()
-    start_compact_sceme(x_start, x_end, X, N[1], a, b, time_steps[1], snapshot_times_2, T)
+    start_compact_sceme(N[1], time_steps[1], snapshot_times_2, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[1]}-dot grid is {t2 - t1}")
 
     t1 = datetime.now()
-    start_compact_sceme(x_start, x_end, X, N[2], a, b, time_steps[2], snapshot_times_4, T)
+    start_compact_sceme(N[2], time_steps[2], snapshot_times_4, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[2]}-dot grid is {t2 - t1}")
