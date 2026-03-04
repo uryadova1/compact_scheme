@@ -19,11 +19,11 @@ def F(q, u, h):
 
 
 def periodic_xx(vect, N):
-    return np.concatenate([[vect[-2]], [vect[-1]], vect, [vect[1]], [vect[2]]])
+    return np.concatenate([[vect[-3]], [vect[-2]], vect, [vect[1]], [vect[2]]])
 
 
 def periodic_x(vect, N):
-    return np.concatenate([[vect[-1]], vect, [vect[1]]])
+    return np.concatenate([[vect[-2]], vect, [vect[1]]])
 
 
 def art_vis(vector_old, N):
@@ -41,7 +41,7 @@ def simple_sum_for_right_part(vect, N):
 
 def sum_for_right_part(vect, N):
     vect = periodic_x(vect, N)
-    return vect[2:] - vect[:-2]
+    return vect[:-2] - vect[2:]
 
 
 def right_part(vect_u, vect_f_u, vect_f_v, r, N):
@@ -73,7 +73,6 @@ def CWA(hv, qv, uv, hu, qu, uu, r, N):
 
         if norm1(h_wk, h_wk_1, q_wk, q_wk_1).all() < eps:
             flag = False
-            # print(k)
         elif k > 1000:
             break
         k += 1

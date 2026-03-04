@@ -29,33 +29,33 @@ def init(x_start: int, x_end: int, X: int, n: int, a: int, b: int):
 def start_compact_sceme(time_steps: int): #N: int, time_steps: int, snapshot_times: list, target_time: list
     r = 0.05
 
-    hu, qu, uu, x = init(x_start, x_end, X, N, a, b)  # n-1
+    hu, qu, uu, x = init(x_start, x_end, X, nodes, a, b)  # n-1
     # simple_graphic(hu, x, 0)
-    hv, qv, uv = np.zeros(N), np.zeros(N), np.zeros(N)  # n
-    hw, qw, uw = np.zeros(N), np.zeros(N), np.zeros(N)  # n+1
+    hv, qv, uv = np.zeros(nodes), np.zeros(nodes), np.zeros(nodes)  # n
+    hw, qw, uw = np.zeros(nodes), np.zeros(nodes), np.zeros(nodes)  # n+1
 
     # time_steps = time_steps_count()
     trg_time = 0
 
     for t in range(time_steps + 1):
         if t == 0:
-            hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 2.8) #NFD(hu, qu, r)
+            hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 0.104) #NFD(hu, qu, r)
         # elif t in snapshot_times:
-            # np.save(f"./check/h_T={target_time[trg_time]}_n={N}_const_dt", hw)
-            # np.save(f"./check/q_T={target_time[trg_time]}_n={N}_const_dt", qw)
-            # print(f"Snapshot ZZZapisan: T={target_time[trg_time]}_n={N}_const_dt")
-            # trg_time += 1
+        #     np.save(f"./check/h_T={target_time[trg_time]}_n={nodes}_const_dt", hw)
+        #     np.save(f"./check/q_T={target_time[trg_time]}_n={nodes}_const_dt", qw)
+        #     print(f"Snapshot ZZZapisan: T={target_time[trg_time]}_n={nodes}_const_dt")
+        #     trg_time += 1
             # simple_graphic(hw, x, t)
 
         else:
-            hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
+            hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, nodes)
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, uw
 
 
 def check():
     T = 0.5
-    delta_h = X / (N - 1)
+    delta_h = X / (nodes - 1)
     delta_t = delta_h * 0.05
     time_steps = int(0.5 / delta_t)
     start_compact_sceme(time_steps)
