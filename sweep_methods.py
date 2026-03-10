@@ -22,11 +22,12 @@ def thomas_algorithm(A, B, C, F, n):
     return x
 
 
-def periodical_sweep_method(vec, f, r, N): #
-    c = 1 + r * vec #верхняя
+def periodical_sweep_method(vec, f, r, N):
+    c = 1 + r * vec[1:]  # верхняя
+    c = np.concatenate([c, [1 + r * vec[0]]])
     b = np.ones(N) * 4
-    a = 1 - r * vec # нижняя - диагонали для матрицы An-1
-
+    a = 1 - r * vec[:-1]  # нижняя - диагонали для матрицы An-1
+    a = np.concatenate([[1 - r * vec[-1]], a])
 
     v_n_1 = np.concatenate(([c[-1]], np.zeros(N - 3), [a[-1]]))
     u_n_1 = np.concatenate(([a[0]], np.zeros(N - 3), [c[N - 2]]))
@@ -38,6 +39,4 @@ def periodical_sweep_method(vec, f, r, N): #
 
     xn = (f[-1] - v_n_1 @ p_n_1) / (c_n - v_n_1 @ q_n_1)
     x_n_1 = p_n_1 - q_n_1 * xn
-    return np.concatenate((x_n_1, [xn]))
-
-
+    return np.concatenate((x_n_1, [xn], [x_n_1[0]]))
