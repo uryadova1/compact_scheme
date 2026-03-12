@@ -4,7 +4,6 @@ from NFD33_scheme import NFD, rusanov_scheme_p
 from CWA_scheme import CWA
 from datetime import datetime
 from graphics import simple_graphic
-from try_k import compact_weak_approximation_scheme_SH
 
 
 def time_steps_count() -> int:
@@ -27,31 +26,33 @@ def init(n: int):
     return h, q, u, x
 
 
-def start_compact_sceme(N: int, time_steps: int, snapshot_times: list, target_time: list): #N: int, time_steps: int, snapshot_times: list, target_time: list
+def start_compact_sceme(N: int, time_steps: int, *args, **kwargs):
     r = 0.05
+
+    snapshot_times = kwargs.get("snapshot_times", None)
+    target_time = kwargs.get("target_time", None)
 
     hu, qu, uu, x = init(N)  # n-1
     hv, qv, uv = np.zeros(N), np.zeros(N), np.zeros(N)  # n
     hw, qw, uw = np.zeros(N), np.zeros(N), np.zeros(N)  # n+1
 
-    # time_steps = time_steps_count()
     trg_time = 0
 
     for t in range(time_steps):
         if t == 0:
-            hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 0.104, N) #NFD(hu, qu, r) #
+            hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 0.104, N)
         else:
             hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
-            if t in snapshot_times:
-                print(t)
-                np.save(f"./gg/h_T={target_time[trg_time]}_n={N}_const_dt", hw)
-                np.save(f"./gg/q_T={target_time[trg_time]}_n={N}_const_dt", qw)
-                print(f"Snapshot ZZZapisan: T={target_time[trg_time]}_n={N}_const_dt")
-                trg_time += 1
+            if snapshot_times is not None and target_time is not None:
+                if t in snapshot_times:
+                    print(t)
+                    np.save(f"./gg/h_T={target_time[trg_time]}_n={N}_const_dt", hw)
+                    np.save(f"./gg/q_T={target_time[trg_time]}_n={N}_const_dt", qw)
+                    print(f"Snapshot записан: T={target_time[trg_time]}_n={N}_const_dt")
+                    trg_time += 1
+
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, uw
-    # print(hw)
-    # simple_graphic(hw, x, time_steps)
 
 
 
