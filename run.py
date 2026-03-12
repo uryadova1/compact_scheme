@@ -4,7 +4,7 @@ from NFD33_scheme import NFD, rusanov_scheme_p
 from CWA_scheme import CWA
 from datetime import datetime
 from graphics import simple_graphic
-from try_k import compact_weak_approximation_scheme_SH
+# from try_k import compact_weak_approximation_scheme_SH
 
 
 def time_steps_count() -> int:
@@ -36,18 +36,21 @@ def start_compact_sceme(N: int, time_steps: int, snapshot_times: list, target_ti
 
     # time_steps = time_steps_count()
     trg_time = 0
-
+    ind = 0
     for t in range(time_steps):
+        print(t)
         if t == 0:
             hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 0.104, N) #NFD(hu, qu, r) #
         else:
             hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
-            if t in snapshot_times:
+            if t == snapshot_times[ind]-1:
                 print(t)
-                np.save(f"./gg/h_T={target_time[trg_time]}_n={N}_const_dt", hw)
-                np.save(f"./gg/q_T={target_time[trg_time]}_n={N}_const_dt", qw)
+                path_part = './snapshots/'
+                np.save(path_part + f"./h_T={target_time[trg_time]}_n={N}_const_dt", hw)
+                np.save(path_part + f"./q_T={target_time[trg_time]}_n={N}_const_dt", qw)
                 print(f"Snapshot ZZZapisan: T={target_time[trg_time]}_n={N}_const_dt")
                 trg_time += 1
+                ind += 1
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, uw
     # print(hw)
@@ -67,15 +70,17 @@ def check():
 
 def three_greeds():
     N = [101, 201, 401] #- УЗЛЫ!!!!!
-    T = [0.5, 1, 2.5]
+    T = [1.0]
     r = 0.05
+    Tf = np.max(T)
+    print(Tf)
     delta_h = [X / (i - 1) for i in N]
     delta_t = [dh * r for dh in delta_h]  # dt для каждой из сеток
-    time_steps = [int(2.5 / dt) + 2 for dt in delta_t]  # количество шагов по времени для кажой из сеток
+    time_steps = [round(Tf / dt) for dt in delta_t]  # количество шагов по времени для кажой из сеток
 
-    snapshot_times_1 = [round(t / delta_t[0]) for t in T]
-    snapshot_times_2 = [round(t / delta_t[1]) for t in T]
-    snapshot_times_4 = [round(t / delta_t[2]) for t in T]
+    snapshot_times_1 = [round(t / delta_t[0]) + 1 for t in T]
+    snapshot_times_2 = [round(t / delta_t[1]) + 1 for t in T]
+    snapshot_times_4 = [round(t / delta_t[2]) + 1 for t in T]
 
     t1 = datetime.now()
     start_compact_sceme(N[0], time_steps[0], snapshot_times_1, T)
@@ -106,5 +111,7 @@ def easy_start():
     start_compact_sceme(N, time_steps, snapshot_times, [T])
 
 
+if __name__ == '__main__':
+    three_greeds()
 
 
