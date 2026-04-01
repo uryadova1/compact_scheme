@@ -63,7 +63,7 @@ def F_func(q, h):
     return np.array(q ** 2 / h + g * h ** 2 / 2)  # приведено к виду q^2/h+gh^2/2, чтобы не использовать u
 
 
-def rusanov_scheme_p(h_n, q_n, R, C, n):
+def rusanov_scheme_periodical(h_n, q_n, R, C, n):
     h_n = np.concatenate([[h_n[n - 3]], [h_n[n - 2]], h_n, [h_n[1]], [h_n[2]]])
     q_n = np.concatenate([[q_n[n - 3]], [q_n[n - 2]], q_n, [q_n[1]], [q_n[2]]])
 

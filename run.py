@@ -1,6 +1,6 @@
 import numpy as np
 from const import *
-from NFD33_scheme import NFD, rusanov_scheme_p
+from NFD33_scheme import NFD, rusanov_scheme_periodical
 from CWA_scheme import CWA
 from datetime import datetime
 from graphics import simple_graphic
@@ -29,27 +29,31 @@ def init(n: int):
 def start_compact_sceme(N: int, time_steps: int, *args, **kwargs):
     r = 0.05
 
-    snapshot_times = kwargs.get("snapshot_times", None)
-    target_time = kwargs.get("target_time", None)
+    snapshot_times = args[0] #kwargs.get("snapshot_times", None)
+    target_time = args[1] #kwargs.get("target_time", None)
 
+    length = len(snapshot_times)
     hu, qu, uu, x = init(N)  # n-1
     hv, qv, uv = np.zeros(N), np.zeros(N), np.zeros(N)  # n
     hw, qw, uw = np.zeros(N), np.zeros(N), np.zeros(N)  # n+1
 
-    trg_time = 0
+    # trg_time = 0
+    time_idx = 0
 
     for t in range(time_steps):
         if t == 0:
-            hv, qv, uv = rusanov_scheme_p(hu, qu, 0.05, 0.104, N)
+            hv, qv, uv = rusanov_scheme_periodical(hu, qu, 0.05, 0.104, N)
         else:
             hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
-            if snapshot_times is not None and target_time is not None:
-                if t in snapshot_times:
-                    print(t)
-                    np.save(f"./gg/h_T={target_time[trg_time]}_n={N}_const_dt", hw)
-                    np.save(f"./gg/q_T={target_time[trg_time]}_n={N}_const_dt", qw)
-                    print(f"Snapshot записан: T={target_time[trg_time]}_n={N}_const_dt")
-                    trg_time += 1
+            # if snapshot_times is not None and target_time is not None:
+            if time_idx < length and t + 1 == snapshot_times[time_idx]:
+                print(t)
+                print(time_idx)
+                np.save(f"./snapshots_GPU/h_T={target_time[time_idx]}_n={N}_const_dt", hw)
+                np.save(f"./snapshots_GPU/q_T={target_time[time_idx]}_n={N}_const_dt", qw)
+                print(f"Snapshot записан: T={target_time[time_idx]}_n={N}_const_dt")
+                # trg_time += 1
+                time_idx += 1
 
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, uw
@@ -67,7 +71,7 @@ def check():
 
 
 def three_greeds():
-    N = [101, 201, 401] #- УЗЛЫ!!!!!
+    N = [2 ** 10 + 1, 2 ** 11 + 1, 2**12 + 1] #- УЗЛЫ!!!!!
     T = [0.5, 1, 2.5]
     r = 0.05
     delta_h = [X / (i - 1) for i in N]
@@ -78,20 +82,26 @@ def three_greeds():
     snapshot_times_2 = [round(t / delta_t[1]) for t in T]
     snapshot_times_4 = [round(t / delta_t[2]) for t in T]
 
+    total_start_time = datetime.now()
     t1 = datetime.now()
+    print(f"Start compact scheme (GPU) on {N[0]} greed")
     start_compact_sceme(N[0], time_steps[0], snapshot_times_1, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[0]}-dot grid is {t2 - t1}")
 
     t1 = datetime.now()
+    print(f"Start compact scheme (GPU) on {N[1]} greed")
     start_compact_sceme(N[1], time_steps[1], snapshot_times_2, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[1]}-dot grid is {t2 - t1}")
 
     t1 = datetime.now()
+    print(f"Start compact scheme (GPU) on {N[2]} greed")
     start_compact_sceme(N[2], time_steps[2], snapshot_times_4, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[2]}-dot grid is {t2 - t1}")
+    total_end_time = datetime.now()
+    print(f"\n Total time: {total_end_time - total_start_time}")
 
 
 def easy_start():

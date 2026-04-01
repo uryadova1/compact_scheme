@@ -6,5 +6,7 @@ from run import check
 if __name__ == '__main__':
     # easy_start()
     # check()
-    # three_greeds()
+    three_greeds()
     relative_errors_and_local_orders_graphic()
+
+

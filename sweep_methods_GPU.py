@@ -6,164 +6,170 @@ import pycuda.driver as drv
 
 from pycuda.compiler import SourceModule
 
-SIMPLE_CUSA_SRC = r"""__global__ void thomas_kernel(
-    double *a,
-    double *b,
-    double *c,
-    double *d,
-    double *x,
-    int N)
+CUDA_SRC = r"""
+extern "C"
+__global__ void crpcrKernel(double *d_a, 
+                            double *d_b, 
+                            double *d_c, 
+                            double *d_d, 
+                            double *d_x, 
+                            unsigned int systemSizeOriginal,
+                            unsigned int iterations)
 {
-    int tid = threadIdx.x;
+    const unsigned int thid = threadIdx.x;
+    const unsigned int blid = blockIdx.x;
+    const unsigned int systemSize = blockDim.x * 2;
+    const unsigned int restSystemSize = blockDim.x;
+    
+    extern __shared__ char shared[];
 
-    __shared__ double c_star[1024];
-    __shared__ double d_star[1024];
+    double* a = (double*)shared;
+    double* b = (double*)&a[systemSize+1];
+    double* c = (double*)&b[systemSize+1];
+    double* d = (double*)&c[systemSize+1];
+    double* x = (double*)&d[systemSize+1];
 
-    if (tid == 0)
+    a[thid] = d_a[thid + blid * systemSizeOriginal];
+    b[thid] = d_b[thid + blid * systemSizeOriginal];
+    c[thid] = d_c[thid + blid * systemSizeOriginal];
+    d[thid] = d_d[thid + blid * systemSizeOriginal];
+    
+    if(thid < (systemSizeOriginal - systemSize/2))
     {
-        c_star[0] = c[0] / b[0];
-        d_star[0] = d[0] / b[0];
-
-        for (int i = 1; i < N; i++)
-        {
-            double m = 1.0 / (b[i] - a[i] * c_star[i-1]);
-            c_star[i] = c[i] * m;
-            d_star[i] = (d[i] - a[i] * d_star[i-1]) * m;
-        }
-
-        x[N-1] = d_star[N-1];
-
-        for (int i = N-2; i >= 0; i--)
-        {
-            x[i] = d_star[i] - c_star[i] * x[i+1];
-        }
+        d[thid + blockDim.x] = d_d[thid + blockDim.x + blid * systemSizeOriginal];
+        b[thid + blockDim.x] = d_b[thid + blockDim.x + blid * systemSizeOriginal];
+        c[thid + blockDim.x] = d_c[thid + blockDim.x + blid * systemSizeOriginal];
+        a[thid + blockDim.x] = d_a[thid + blockDim.x + blid * systemSizeOriginal];
     }
-}"""
-
-CUDA_SRC = R"""template<typename T>
-__device__ void thomas_kernel(
-    T* a, T* b, T* c, T* d, T* x,
-    int stride,
-    int systemSize)
-{
-    int tid = threadIdx.x;
-
-    // Forward elimination
-    int first = tid;
-    c[first] = c[first] / b[first];
-    d[first] = d[first] / b[first];
-
-    for (int i = first + stride; i < systemSize; i += stride)
+    else
     {
-        T tmp = b[i] - a[i] * c[i - stride];
-        c[i] = c[i] / tmp;
-        d[i] = (d[i] - a[i] * d[i - stride]) / tmp;
+        d[thid + blockDim.x] = 0;
+        b[thid + blockDim.x] = 1;
+        c[thid + blockDim.x] = 0;
+        a[thid + blockDim.x] = 1;    
     }
-
-    // Back substitution
-    int last = systemSize - stride + tid;
-    x[last] = d[last];
-
-    for (int i = last - stride; i >= 0; i -= stride)
+    __syncthreads();
+      
+    int i = 2 * thid + 1;
+    if(i == systemSize - 1)
     {
-        x[i] = d[i] - c[i] * x[i + stride];
+        double tmp = a[i] / b[i-1];
+        b[i] = b[i] - c[i-1] * tmp;
+        d[i] = d[i] - d[i-1] * tmp;
+        a[i] = -a[i-1] * tmp;
+        c[i] = 0;
     }
-}
-
-
-template<typename T>
-__global__ void pcr_thomas_kernel(
-    T* a_g,
-    T* b_g,
-    T* c_g,
-    T* d_g,
-    T* x_g,
-    int systemSize,
-    int pcrSteps)
-{
-    extern __shared__ T smem[];
-
-    T* a = smem;
-    T* b = &a[systemSize];
-    T* c = &b[systemSize];
-    T* d = &c[systemSize];
-    T* x = &d[systemSize];
-
-    int tid = threadIdx.x;
-    int gid = blockIdx.x * systemSize + tid;
-
-    // загрузка системы
-    if (tid < systemSize)
+    else
     {
-        a[tid] = a_g[gid];
-        b[tid] = b_g[gid];
-        c[tid] = c_g[gid];
-        d[tid] = d_g[gid];
+        double tmp1 = a[i] / b[i-1];
+        double tmp2 = c[i] / b[i+1];
+        b[i] = b[i] - c[i-1] * tmp1 - a[i+1] * tmp2;
+        d[i] = d[i] - d[i-1] * tmp1 - d[i+1] * tmp2;
+        a[i] = -a[i-1] * tmp1;
+        c[i] = -c[i+1] * tmp2;
     }
+    
+    __syncthreads();    
+    
+    double* aa = (double*)&x[systemSize+1];
+    double* bb = (double*)&aa[restSystemSize];
+    double* cc = (double*)&bb[restSystemSize];
+    double* dd = (double*)&cc[restSystemSize];
+    double* xx = (double*)&dd[restSystemSize];
+
+    
+    aa[thid] = a[thid*2+1];
+    bb[thid] = b[thid*2+1];
+    cc[thid] = c[thid*2+1];
+    dd[thid] = d[thid*2+1];
 
     __syncthreads();
 
-    // ---------- PCR reduction ----------
+    double aNew, bNew, cNew, dNew;
     int delta = 1;
 
-    for (int step = 0; step < pcrSteps; step++)
+    //parallel cyclic reduction
+    for (unsigned int j = 0; j < iterations; j++)
     {
-        int i = tid;
-
-        int left  = i - delta;
-        int right = i + delta;
-
-        if (left < 0) left = 0;
-        if (right >= systemSize) right = systemSize - 1;
-
-        T alpha = a[i] / b[left];
-        T beta  = c[i] / b[right];
-
-        T b_new = b[i] - c[left]*alpha - a[right]*beta;
-        T d_new = d[i] - d[left]*alpha - d[right]*beta;
-        T a_new = -a[left]*alpha;
-        T c_new = -c[right]*beta;
-
+        int i = thid;
+        if(i < delta)
+        {
+            double tmp2 = cc[i] / bb[i+delta];
+            bNew = bb[i] - aa[i+delta] * tmp2;
+            dNew = dd[i] - dd[i+delta] * tmp2;
+            aNew = 0;
+            cNew = -cc[i+delta] * tmp2;
+        }
+        else if((restSystemSize-i-1) < delta)
+        {
+            double tmp = aa[i] / bb[i-delta];
+            bNew = bb[i] - cc[i-delta] * tmp;
+            dNew = dd[i] - dd[i-delta] * tmp;
+            aNew = -aa[i-delta] * tmp;
+            cNew = 0;
+        }
+        else
+        {
+            double tmp1 = aa[i] / bb[i-delta];
+            double tmp2 = cc[i] / bb[i+delta];
+            bNew = bb[i] - cc[i-delta] * tmp1 - aa[i+delta] * tmp2;
+            dNew = dd[i] - dd[i-delta] * tmp1 - dd[i+delta] * tmp2;
+            aNew = -aa[i-delta] * tmp1;
+            cNew = -cc[i+delta] * tmp2;
+        }
         __syncthreads();
 
-        a[i] = a_new;
-        b[i] = b_new;
-        c[i] = c_new;
-        d[i] = d_new;
+        bb[i] = bNew;
+        dd[i] = dNew;
+        aa[i] = aNew;
+        cc[i] = cNew;
 
-        delta *= 2;
-
+        delta *=2;
+        
         __syncthreads();
     }
 
-    // ---------- Thomas solve ----------
-    // после PCR каждая нить решает свою систему
-    int stride = delta;
-
-    if (tid < stride)
+    if (thid < delta)
     {
-        thomas_strided(a + tid,
-                       b + tid,
-                       c + tid,
-                       d + tid,
-                       x + tid,
-                       stride,
-                       systemSize);
+        int addr1 = thid;
+        int addr2 = thid+delta;
+        double tmp3 = bb[addr2]*bb[addr1]-cc[addr1]*aa[addr2];
+        xx[addr1] = (bb[addr2]*dd[addr1]-cc[addr1]*dd[addr2])/tmp3;
+        xx[addr2] = (dd[addr2]*bb[addr1]-dd[addr1]*aa[addr2])/tmp3;
     }
+    
+    __syncthreads(); 
+    
+    x[thid*2+1]=xx[thid];
 
     __syncthreads();
+  
+    //backward substitution    
+    i = 2 * thid;
+    if(i == 0)
+        x[i] = (d[i] - c[i]*x[i+1]) / b[i];
+    else
+        x[i] = (d[i] - a[i]*x[i-1] - c[i]*x[i+1]) / b[i];
+    
+    __syncthreads();    
 
-    // запись решения
-    if (tid < systemSize)
-    {
-        x_g[gid] = x[tid];
-    }
-}"""
+    d_x[thid + blid * systemSizeOriginal] = x[thid];
+    
+    if(thid < (systemSizeOriginal - systemSize/2))
+        d_x[thid + blockDim.x + blid * systemSizeOriginal] = x[thid + blockDim.x];
+}
+
+"""
+
+mod = SourceModule(CUDA_SRC, options=["-arch=sm_86"])
+
+crpcr = mod.get_function("crpcrKernel")
 
 
 def periodical_sweep_gpu(vec, f, r, N):
-    mod = SourceModule(SIMPLE_CUSA_SRC)
-    thomas_gpu = mod.get_function("thomas_kernel")
+    global crpcr
+    assert (N & (N - 1)) == 0, "N-1 должно быть степенью двойки"
+    systemSize = N - 1
 
     c = 1 + r * vec[1:]
     c = np.concatenate([c, [1 + r * vec[0]]])
@@ -182,36 +188,38 @@ def periodical_sweep_gpu(vec, f, r, N):
     b_sub = b[:-1]
     c_sub = np.concatenate((c[:-2], [0]))
 
-    a_gpu = cuda.mem_alloc(a_sub.nbytes)
-    b_gpu = cuda.mem_alloc(b_sub.nbytes)
-    c_gpu = cuda.mem_alloc(c_sub.nbytes)
-
-    p_gpu = cuda.mem_alloc((N - 1) * 8)
-    q_gpu = cuda.mem_alloc((N - 1) * 8)
-
+    a_gpu = cuda.mem_alloc((N - 1) * 8)
+    b_gpu = cuda.mem_alloc((N - 1) * 8)
+    c_gpu = cuda.mem_alloc((N - 1) * 8)
     f_gpu = cuda.mem_alloc((N - 1) * 8)
+    p_gpu = cuda.mem_alloc((N - 1) * 8)
     u_gpu = cuda.mem_alloc((N - 1) * 8)
+    q_gpu = cuda.mem_alloc((N - 1) * 8)
 
     cuda.memcpy_htod(a_gpu, a_sub)
     cuda.memcpy_htod(b_gpu, b_sub)
     cuda.memcpy_htod(c_gpu, c_sub)
-
     cuda.memcpy_htod(f_gpu, f[:-1])
     cuda.memcpy_htod(u_gpu, u_n_1)
 
-    thomas_gpu(
-        a_gpu, b_gpu, c_gpu,
-        f_gpu, p_gpu,
-        np.int32(N - 1),
-        block=(1, 1, 1), grid=(1, 1)
-    )
 
-    thomas_gpu(
-        a_gpu, b_gpu, c_gpu,
-        u_gpu, q_gpu,
-        np.int32(N - 1),
-        block=(1, 1, 1), grid=(1, 1)
-    )
+    iterations = int(np.log2(systemSize // 2))
+    shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
+
+    crpcr(a_gpu, b_gpu, c_gpu, f_gpu, p_gpu,
+          np.uint32(N - 1),  # systemSizeOriginal
+          np.uint32(iterations),
+          block=(systemSize // 2, 1, 1),  # blockDim.x = N/2
+          grid=(1, 1),  # одна система
+          shared=shared )  # systemSize * 5 * 8 + (systemSize // 2) * 5 * 8
+
+    # Второй вызов для q
+    crpcr(a_gpu, b_gpu, c_gpu, u_gpu, q_gpu,
+          np.uint32(N - 1),
+          np.uint32(iterations),
+          block=(systemSize // 2, 1, 1),
+          grid=(1, 1),
+          shared=shared)
 
     p = np.empty(N - 1)
     q = np.empty(N - 1)
@@ -222,5 +230,13 @@ def periodical_sweep_gpu(vec, f, r, N):
     xn = (f[-1] - v_n_1 @ p) / (c_n - v_n_1 @ q)
 
     x_n_1 = p - q * xn
+
+    a_gpu.free()
+    b_gpu.free()
+    c_gpu.free()
+    f_gpu.free()
+    p_gpu.free()
+    u_gpu.free()
+    q_gpu.free()
 
     return np.concatenate((x_n_1, [xn], [x_n_1[0]]))

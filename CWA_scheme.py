@@ -1,6 +1,7 @@
 import numpy as np
 from const import g
 from sweep_methods import periodical_sweep_method
+from sweep_methods_GPU import periodical_sweep_gpu
 
 
 def norm1(hw, hw_1, qw, qw_1):
@@ -27,7 +28,7 @@ def art_vis(vector_old):
     return delta_4x
 
 
-def simple_sum_for_right_part(vect):
+def simple_sum_for_n_minus_1_layer(vect):
     vect = periodic_x(vect)
     return vect[:-2] + 4 * vect[1:-1] + vect[2:]
 
@@ -38,7 +39,7 @@ def sum_for_right_part(vect):
 
 
 def right_part(vect_u, vect_f_u, vect_f_v, r):
-    return simple_sum_for_right_part(vect_u) - 4 * r * sum_for_right_part(vect_f_v) - r * sum_for_right_part(
+    return simple_sum_for_n_minus_1_layer(vect_u) - 4 * r * sum_for_right_part(vect_f_v) - r * sum_for_right_part(
         vect_f_u) - art_vis(vect_u)
 
 
@@ -58,11 +59,13 @@ def CWA(hv, qv, uv, hu, qu, uu, r, N):
     u_wk = uv
 
     while flag:
-        h_wk_1 = periodical_sweep_method(u_wk[:-1], right_part_h[:-1], r, N - 1)
+        # h_wk_1 = periodical_sweep_method(u_wk[:-1], right_part_h[:-1], r, N - 1)
+        h_wk_1 = periodical_sweep_gpu(u_wk[:-1], right_part_h[:-1], r, N - 1)
 
         right_part_q_add = right_part_q - g * r * sum_for_right_part(h_wk_1 ** 2) / 2
 
-        q_wk_1 = periodical_sweep_method(u_wk[:-1], right_part_q_add[:-1], r, N - 1)
+        # q_wk_1 = periodical_sweep_method(u_wk[:-1], right_part_q_add[:-1], r, N - 1)
+        q_wk_1 = periodical_sweep_gpu(u_wk[:-1], right_part_q_add[:-1], r, N - 1)
 
         u_wk_1 = q_wk_1 / h_wk_1
 
