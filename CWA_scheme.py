@@ -59,12 +59,10 @@ def CWA(hv, qv, uv, hu, qu, uu, r, N):
     u_wk = uv
 
     while flag:
-        # h_wk_1 = periodical_sweep_method(u_wk[:-1], right_part_h[:-1], r, N - 1)
         h_wk_1 = periodical_sweep_gpu(u_wk[:-1], right_part_h[:-1], r, N - 1)
 
         right_part_q_add = right_part_q - g * r * sum_for_right_part(h_wk_1 ** 2) / 2
 
-        # q_wk_1 = periodical_sweep_method(u_wk[:-1], right_part_q_add[:-1], r, N - 1)
         q_wk_1 = periodical_sweep_gpu(u_wk[:-1], right_part_q_add[:-1], r, N - 1)
 
         u_wk_1 = q_wk_1 / h_wk_1

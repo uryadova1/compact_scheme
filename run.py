@@ -29,22 +29,21 @@ def init(n: int):
 def start_compact_sceme(N: int, time_steps: int, *args, **kwargs):
     r = 0.05
 
-    snapshot_times = args[0] #kwargs.get("snapshot_times", None)
-    target_time = args[1] #kwargs.get("target_time", None)
+    snapshot_times = args[0]  # kwargs.get("snapshot_times", None)
+    target_time = args[1]  # kwargs.get("target_time", None)
 
     length = len(snapshot_times)
     hu, qu, uu, x = init(N)  # n-1
     hv, qv, uv = np.zeros(N), np.zeros(N), np.zeros(N)  # n
     hw, qw, uw = np.zeros(N), np.zeros(N), np.zeros(N)  # n+1
 
-    # trg_time = 0
     time_idx = 0
-
     for t in range(time_steps):
         if t == 0:
             hv, qv, uv = rusanov_scheme_periodical(hu, qu, 0.05, 0.104, N)
         else:
             hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
+            simple_graphic(hw, x, t)
             # if snapshot_times is not None and target_time is not None:
             if time_idx < length and t + 1 == snapshot_times[time_idx]:
                 print(t)
@@ -59,7 +58,6 @@ def start_compact_sceme(N: int, time_steps: int, *args, **kwargs):
             hv, qv, uv = hw, qw, uw
 
 
-
 def check():
     T = 2.5
     delta_h = X / (101 - 1)
@@ -69,9 +67,8 @@ def check():
     start_compact_sceme(101, time_steps)
 
 
-
 def three_greeds():
-    N = [2 ** 10 + 1, 2 ** 11 + 1, 2**12 + 1] #- УЗЛЫ!!!!!
+    N = [2 ** 5 + 2, 2 ** 6 + 2, 2 ** 7 + 2]  # - УЗЛЫ!!!!!
     T = [0.5, 1, 2.5]
     r = 0.05
     delta_h = [X / (i - 1) for i in N]
@@ -109,13 +106,8 @@ def easy_start():
     T = 1
     r = 0.05
     delta_h = X / (N - 1)
-    delta_t = delta_h * r # dt для каждой из сеток
+    delta_t = delta_h * r  # dt для каждой из сеток
     time_steps = int(T / delta_t) + 2
     snapshot_times = [round(T / delta_t)]
 
-
     start_compact_sceme(N, time_steps, snapshot_times, [T])
-
-
-
-

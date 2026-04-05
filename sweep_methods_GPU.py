@@ -161,15 +161,15 @@ __global__ void crpcrKernel(double *d_a,
 
 """
 
-mod = SourceModule(CUDA_SRC, options=["-arch=sm_86"])
+mod = SourceModule(CUDA_SRC, options=["-arch=sm_86", "--maxrregcount=64"])
 
 crpcr = mod.get_function("crpcrKernel")
 
 
 def periodical_sweep_gpu(vec, f, r, N):
     global crpcr
-    assert (N & (N - 1)) == 0, "N-1 должно быть степенью двойки"
-    systemSize = N - 1
+    # assert (N & (N - 1)) == 0, "N-1 должно быть степенью двойки"
+    systemSize = N-1
 
     c = 1 + r * vec[1:]
     c = np.concatenate([c, [1 + r * vec[0]]])
@@ -187,6 +187,12 @@ def periodical_sweep_gpu(vec, f, r, N):
     a_sub = np.concatenate(([0], a[1:-1]))
     b_sub = b[:-1]
     c_sub = np.concatenate((c[:-2], [0]))
+
+    a_sub = a_sub.astype(np.float64)
+    b_sub = b_sub.astype(np.float64)
+    c_sub = c_sub.astype(np.float64)
+    f = f.astype(np.float64)
+    u_n_1 = u_n_1.astype(np.float64)
 
     a_gpu = cuda.mem_alloc((N - 1) * 8)
     b_gpu = cuda.mem_alloc((N - 1) * 8)
@@ -207,22 +213,25 @@ def periodical_sweep_gpu(vec, f, r, N):
     shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
 
     crpcr(a_gpu, b_gpu, c_gpu, f_gpu, p_gpu,
-          np.uint32(N - 1),  # systemSizeOriginal
+          np.uint32(systemSize),  # systemSizeOriginal
           np.uint32(iterations),
-          block=(systemSize // 2, 1, 1),  # blockDim.x = N/2
-          grid=(1, 1),  # одна система
-          shared=shared )  # systemSize * 5 * 8 + (systemSize // 2) * 5 * 8
+          grid=(1, 1, 1),
+          block=(systemSize // 2, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
+          shared=shared )
 
-    # Второй вызов для q
+    cuda.memcpy_htod(a_gpu, a_sub)
+    cuda.memcpy_htod(b_gpu, b_sub)
+    cuda.memcpy_htod(c_gpu, c_sub)
+
     crpcr(a_gpu, b_gpu, c_gpu, u_gpu, q_gpu,
-          np.uint32(N - 1),
+          np.uint32(systemSize),
           np.uint32(iterations),
+          grid=(1, 1, 1),
           block=(systemSize // 2, 1, 1),
-          grid=(1, 1),
           shared=shared)
 
-    p = np.empty(N - 1)
-    q = np.empty(N - 1)
+    p = np.zeros(N - 1, dtype=np.float64)
+    q = np.zeros(N - 1, dtype=np.float64)
 
     cuda.memcpy_dtoh(p, p_gpu)
     cuda.memcpy_dtoh(q, q_gpu)
