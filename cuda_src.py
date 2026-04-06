@@ -1,7 +1,29 @@
-
-
 CUDA_SRC_PCR_THOMAS = r"""
 extern "C"
+
+__device__ void thomas(double *a, double *b, double *c, double *d, double *x, 
+                       int group_size, int tid)
+{   
+    int stride = 1;
+    c[tid] = c[tid] / b[tid];
+    d[tid] = d[tid] / b[tid];
+    int startLocationSystem = stride + tid; //что такое страйд, мб я просто не те ур-я считаю
+    for (int i = startLocationSystem; i < group_size; i += stride)
+    {
+    double tmp = (b[i] - a[i] * c[i - stride]);
+    c[i] = c[i] / tmp;
+    d[i] = (d[i] - d[i - stride] * a[i]) / tmp;
+    }
+    
+    int endLocationSystem = group_size - stride + tid;
+    x[endLocationSystem] = d[endLocationSystem];
+    
+    for (int i = endLocationSystem - stride; i >= 0; i -= stride)
+    {
+        x[i] = d[i] - c[i] * x[i + stride];
+    }
+}
+
 __global__ void pcr_thomas(double *d_a, 
                             double *d_b, 
                             double *d_c, 
@@ -10,53 +32,43 @@ __global__ void pcr_thomas(double *d_a,
                             unsigned int sizeSystem,
                             unsigned int iterations){
                             
-    const unsigned int tid = threadIdx.x;           // Номер потока (0,1,2,...)
-    const unsigned int bid = blockIdx.x;            // Номер системы (если их много)
+    const unsigned int tid = threadIdx.x;           
+    const unsigned int bid = blockIdx.x;           
     
     // Размер группы после PCR
     const unsigned int group_size = sizeSystem / (1 << iterations);
     
-    // Шаг (stride) между уравнениями в группе - это кажется аналог delta из статьи
+    // Шаг (stride) между уравнениями в группе 
     const unsigned int stride = 1 << iterations;
     
-    extern __shared__ char shared[];  // Общая память для блока
+    //if (tid == 0 && bid == 0) printf("%u", group_size);
+
     
-    // 5 массивов для хранения уравнений группы
+    extern __shared__ char shared[];  
+    
     double *a = (double*)shared;                          // Нижняя диагональ
-    double *b = (double*)&a[group_size];                 // Главная диагональ
-    double *c = (double*)&b[group_size];                 // Верхняя диагональ
-    double *d = (double*)&c[group_size];                 // Правая часть
-    double *x = (double*)&d[group_size];                 // Решение
+    double *b = a + sizeSystem;                 // Главная диагональ
+    double *c = b + sizeSystem;                 // Верхняя диагональ
+    double *d = c + sizeSystem;                 // Правая часть
+    double *x = d + sizeSystem;                 // Решение
     
-    double *a_pcr = a;   // Переиспользуем те же массивы - для записи массивов для томаса
-    double *b_pcr = b;
-    double *c_pcr = c;
-    double *d_pcr = d;
+    a[tid] = d_a[tid];
+    b[tid] = d_b[tid];
+    c[tid] = d_c[tid];
+    d[tid] = d_d[tid];
     
-    if (tid < group_size) {
-        // Вычисляем глобальный индекс уравнения
-        // Уравнения в группе идут с шагом stride
-        int global_idx = bid * stride + tid * stride;
-        
-        // Загружаем диагонали и правую часть
-        a[tid] = d_a[global_idx];
-        b[tid] = d_b[global_idx];
-        c[tid] = d_c[global_idx];
-        d[tid] = d_d[global_idx];
-        
-        // Инициализация решения
-        x[tid] = 0.0;
-    }
+    // Инициализация решения
+    x[tid] = 0.0;
+    
     __syncthreads();
     
     double aNew, bNew, cNew, dNew;
     int delta = 1;
-    
-    for (int j = 0; j <iterations; j++)
+    int i = tid;
+    for (int j = 0; j < iterations; ++j)
     {
-        int i = threadIdx.x;
         int iRight = i + delta;
-        if (iRight >= sizeSystem) iRight = sizeSystem - 1;
+        if (iRight >= group_size) iRight = group_size - 1; //я не понимаю размер группы или системы
         int iLeft = i - delta;
         if (iLeft < 0) iLeft = 0;
         
@@ -72,17 +84,18 @@ __global__ void pcr_thomas(double *d_a,
         d[i] = dNew;
         a[i] = aNew;
         c[i] = cNew;
-        delta <<= 1;
         __syncthreads();
+        delta <<= 1;
     }
     
-    if (thid < delta)
+    if (tid < delta)
     {
-        int addr1 = thid;
-        int addr2 = thid+delta;
-        double tmp3 = bb[addr2]*bb[addr1]-cc[addr1]*aa[addr2];
-        xx[addr1] = (bb[addr2]*dd[addr1]-cc[addr1]*dd[addr2])/tmp3;
-        xx[addr2] = (dd[addr2]*bb[addr1]-dd[addr1]*aa[addr2])/tmp3;
+        int addr1 = tid;
+        int addr2 = tid + delta;
+
+        float tmp = b[addr2] * b[addr1] - c[addr1] * a[addr2];
+        x[addr1] = (b[addr2] * d[addr1] - c[addr1] * d[addr2]) / tmp;
+        x[addr2] = (d[addr2] * b[addr1] - d[addr1] * a[addr2]) / tmp;
     }
     
     __syncthreads();
@@ -97,31 +110,7 @@ __global__ void pcr_thomas(double *d_a,
     }                                                  
 }
 
-__device__ void thomas(double *a, double *b, double *c, double *d, double *x, 
-                       int group_size, int tid)
-{
-    // В Thomas алгоритме из статьи используется stride
-    // Но для независимой группы stride = 1
-    const int stride = 1;
-    
-    // Forward elimination - только один поток выполняет (как в статье)
-    if (tid == 0) {
-        // Первое уравнение
-        c[0] = c[0] / b[0];
-        d[0] = d[0] / b[0];
-        
-        // Остальные уравнения
-        for (int i = 1; i < group_size; i++) {
-            double tmp = b[i] - a[i] * c[i - stride];
-            c[i] = c[i] / tmp;
-            d[i] = (d[i] - d[i - stride] * a[i]) / tmp;
-        }
-        
-        // Backward substitution
-        x[group_size - 1] = d[group_size - 1];
-        for (int i = group_size - 2; i >= 0; i--) {
-            x[i] = d[i] - c[i] * x[i + stride];
-        }
-    }
-}
+
 """
+
+

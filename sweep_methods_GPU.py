@@ -2,6 +2,7 @@ import numpy as np
 import pycuda.autoinit
 import pycuda.driver as cuda
 import numpy as np
+from cuda_src import CUDA_SRC_PCR_THOMAS
 import pycuda.driver as drv
 
 from pycuda.compiler import SourceModule
@@ -161,15 +162,15 @@ __global__ void crpcrKernel(double *d_a,
 
 """
 
-mod = SourceModule(CUDA_SRC, options=["-arch=sm_86", "--maxrregcount=64"])
+mod = SourceModule(CUDA_SRC_PCR_THOMAS, options=["-arch=sm_86"])
 
-crpcr = mod.get_function("crpcrKernel")
+crpcr = mod.get_function("pcr_thomas")
 
 
 def periodical_sweep_gpu(vec, f, r, N):
     global crpcr
     # assert (N & (N - 1)) == 0, "N-1 должно быть степенью двойки"
-    systemSize = N-1
+    systemSize = N - 1
 
     c = 1 + r * vec[1:]
     c = np.concatenate([c, [1 + r * vec[0]]])
@@ -194,13 +195,13 @@ def periodical_sweep_gpu(vec, f, r, N):
     f = f.astype(np.float64)
     u_n_1 = u_n_1.astype(np.float64)
 
-    a_gpu = cuda.mem_alloc((N - 1) * 8)
-    b_gpu = cuda.mem_alloc((N - 1) * 8)
-    c_gpu = cuda.mem_alloc((N - 1) * 8)
-    f_gpu = cuda.mem_alloc((N - 1) * 8)
-    p_gpu = cuda.mem_alloc((N - 1) * 8)
-    u_gpu = cuda.mem_alloc((N - 1) * 8)
-    q_gpu = cuda.mem_alloc((N - 1) * 8)
+    a_gpu = cuda.mem_alloc(systemSize * 8)
+    b_gpu = cuda.mem_alloc(systemSize * 8)
+    c_gpu = cuda.mem_alloc(systemSize * 8)
+    f_gpu = cuda.mem_alloc(systemSize * 8)
+    p_gpu = cuda.mem_alloc(systemSize * 8)
+    u_gpu = cuda.mem_alloc(systemSize * 8)
+    q_gpu = cuda.mem_alloc(systemSize * 8)
 
     cuda.memcpy_htod(a_gpu, a_sub)
     cuda.memcpy_htod(b_gpu, b_sub)
@@ -208,16 +209,19 @@ def periodical_sweep_gpu(vec, f, r, N):
     cuda.memcpy_htod(f_gpu, f[:-1])
     cuda.memcpy_htod(u_gpu, u_n_1)
 
-
-    iterations = int(np.log2(systemSize // 2))
+    target_group_size = 8
+    iterations = int(np.log2(systemSize / target_group_size))  # int(np.log2(systemSize // 2))
     shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
+
+    group_size = N // (2 ** iterations)
+    num_groups = 2 ** iterations
 
     crpcr(a_gpu, b_gpu, c_gpu, f_gpu, p_gpu,
           np.uint32(systemSize),  # systemSizeOriginal
           np.uint32(iterations),
-          grid=(1, 1, 1),
-          block=(systemSize // 2, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
-          shared=shared )
+          grid=(num_groups, 1, 1),
+          block=(group_size, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
+          shared=shared)
 
     cuda.memcpy_htod(a_gpu, a_sub)
     cuda.memcpy_htod(b_gpu, b_sub)
@@ -226,8 +230,8 @@ def periodical_sweep_gpu(vec, f, r, N):
     crpcr(a_gpu, b_gpu, c_gpu, u_gpu, q_gpu,
           np.uint32(systemSize),
           np.uint32(iterations),
-          grid=(1, 1, 1),
-          block=(systemSize // 2, 1, 1),
+          grid=(num_groups, 1, 1),
+          block=(group_size, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
           shared=shared)
 
     p = np.zeros(N - 1, dtype=np.float64)
