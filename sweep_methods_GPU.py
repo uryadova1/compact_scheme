@@ -213,14 +213,18 @@ def periodical_sweep_gpu(vec, f, r, N):
     iterations = int(np.log2(systemSize / target_group_size))  # int(np.log2(systemSize // 2))
     shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
 
+
     group_size = N // (2 ** iterations)
     num_groups = 2 ** iterations
 
+    # print(f"shared: {shared}\niterations:{iterations}\ngroup size: {group_size}\nnum_groups: {num_groups}")
+    # exit(0)
+
     crpcr(a_gpu, b_gpu, c_gpu, f_gpu, p_gpu,
-          np.uint32(systemSize),  # systemSizeOriginal
+          np.uint32(systemSize),
           np.uint32(iterations),
           grid=(num_groups, 1, 1),
-          block=(group_size, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
+          block=(group_size, 1, 1),
           shared=shared)
 
     cuda.memcpy_htod(a_gpu, a_sub)

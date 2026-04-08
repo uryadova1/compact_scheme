@@ -88,7 +88,7 @@ __global__ void pcr_thomas(double *d_a,
         delta <<= 1;
     }
     
-    if (tid < delta)
+    if (tid < delta) //что это значит
     {
         int addr1 = tid;
         int addr2 = tid + delta;
@@ -100,7 +100,7 @@ __global__ void pcr_thomas(double *d_a,
     
     __syncthreads();
     
-    thomas(a, b, c, d, x, group_size, tid);
+    thomas(a, b, c, d, x, group_size, tid); //4
     __syncthreads();
     
     // Сохранение результата
