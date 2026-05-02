@@ -41,6 +41,7 @@ def start_compact_sceme(N: int, time_steps: int, *args, **kwargs):
     for t in range(time_steps):
         if t == 0:
             hv, qv, uv = rusanov_scheme_periodical(hu, qu, 0.05, 0.104, N)
+            simple_graphic(hv, x, t)
         else:
             hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
             simple_graphic(hw, x, t)
@@ -68,7 +69,7 @@ def check():
 
 
 def three_greeds():
-    N = [2 ** 5 + 2, 2 ** 6 + 2, 2 ** 7 + 2]  # - УЗЛЫ!!!!!
+    N = [2 ** 10 + 2, 2 ** 11 + 2, 2 ** 12 + 2]  # - УЗЛЫ!!!!!
     T = [0.5, 1, 2.5]
     r = 0.05
     delta_h = [X / (i - 1) for i in N]

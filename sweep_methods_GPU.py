@@ -209,22 +209,30 @@ def periodical_sweep_gpu(vec, f, r, N):
     cuda.memcpy_htod(f_gpu, f[:-1])
     cuda.memcpy_htod(u_gpu, u_n_1)
 
-    target_group_size = 8
-    iterations = int(np.log2(systemSize / target_group_size))  # int(np.log2(systemSize // 2))
-    shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
+    # target_group_size = 8
+    # switchPoints = int(np.log2(systemSize / target_group_size))  # int(np.log2(systemSize // 2))
 
+    target_group_size = 64  # или 128, в зависимости от available shared memory
+    switchPoints = int(np.log2(systemSize / target_group_size))
+    switchPoints = max(0, min(switchPoints, int(np.log2(systemSize))))
 
-    group_size = N // (2 ** iterations)
-    num_groups = 2 ** iterations
+    stride = 1 << switchPoints
 
-    # print(f"shared: {shared}\niterations:{iterations}\ngroup size: {group_size}\nnum_groups: {num_groups}")
+    # shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
+    shared = 5 * systemSize * 8
+
+    # group_size = N // (2 ** switchPoints)
+    num_groups = 2 ** switchPoints
+
+    # print(f"shared: {shared}\nswitchPoints:{switchPoints}\ngroup size: {group_size}\nnum_groups: {num_groups}")
     # exit(0)
 
     crpcr(a_gpu, b_gpu, c_gpu, f_gpu, p_gpu,
           np.uint32(systemSize),
-          np.uint32(iterations),
+          np.uint32(switchPoints),
+          np.uint32(stride),
           grid=(num_groups, 1, 1),
-          block=(group_size, 1, 1),
+          block=(systemSize, 1, 1),
           shared=shared)
 
     cuda.memcpy_htod(a_gpu, a_sub)
@@ -233,9 +241,10 @@ def periodical_sweep_gpu(vec, f, r, N):
 
     crpcr(a_gpu, b_gpu, c_gpu, u_gpu, q_gpu,
           np.uint32(systemSize),
-          np.uint32(iterations),
+          np.uint32(switchPoints),
+          np.uint32(stride),
           grid=(num_groups, 1, 1),
-          block=(group_size, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
+          block=(systemSize, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
           shared=shared)
 
     p = np.zeros(N - 1, dtype=np.float64)

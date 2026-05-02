@@ -2,9 +2,10 @@ CUDA_SRC_PCR_THOMAS = r"""
 extern "C"
 
 __device__ void thomas(double *a, double *b, double *c, double *d, double *x, 
-                       int group_size, int tid)
+                       int group_size, int tid, int stride)
 {   
-    int stride = 1;
+    //int stride = 1; - ПЕРЕДАЕТСЯ
+
     c[tid] = c[tid] / b[tid];
     d[tid] = d[tid] / b[tid];
     int startLocationSystem = stride + tid; //что такое страйд, мб я просто не те ур-я считаю
@@ -30,7 +31,8 @@ __global__ void pcr_thomas(double *d_a,
                             double *d_d, 
                             double *d_x, 
                             unsigned int sizeSystem,
-                            unsigned int iterations){
+                            unsigned int iterations,
+                            unsigned int stride){
                             
     const unsigned int tid = threadIdx.x;           
     const unsigned int bid = blockIdx.x;           
@@ -39,10 +41,8 @@ __global__ void pcr_thomas(double *d_a,
     const unsigned int group_size = sizeSystem / (1 << iterations);
     
     // Шаг (stride) между уравнениями в группе 
-    const unsigned int stride = 1 << iterations;
+    //const unsigned int stride = 1 << iterations;
     
-    //if (tid == 0 && bid == 0) printf("%u", group_size);
-
     
     extern __shared__ char shared[];  
     
@@ -68,7 +68,7 @@ __global__ void pcr_thomas(double *d_a,
     for (int j = 0; j < iterations; ++j)
     {
         int iRight = i + delta;
-        if (iRight >= group_size) iRight = group_size - 1; //я не понимаю размер группы или системы
+        if (iRight >= sizeSystem) iRight = sizeSystem - 1; //я не понимаю размер группы или системы
         int iLeft = i - delta;
         if (iLeft < 0) iLeft = 0;
         
@@ -88,29 +88,30 @@ __global__ void pcr_thomas(double *d_a,
         delta <<= 1;
     }
     
-    if (tid < delta) //что это значит
-    {
-        int addr1 = tid;
-        int addr2 = tid + delta;
-
-        float tmp = b[addr2] * b[addr1] - c[addr1] * a[addr2];
-        x[addr1] = (b[addr2] * d[addr1] - c[addr1] * d[addr2]) / tmp;
-        x[addr2] = (d[addr2] * b[addr1] - d[addr1] * a[addr2]) / tmp;
-    }
+    if (iterations == (int)log2((float)sizeSystem)){ //прооверим
+        if (tid < delta) //что это значит
+        {
+            int addr1 = tid;
+            int addr2 = tid + delta;
+    
+            float tmp = b[addr2] * b[addr1] - c[addr1] * a[addr2];
+            x[addr1] = (b[addr2] * d[addr1] - c[addr1] * d[addr2]) / tmp;
+            x[addr2] = (d[addr2] * b[addr1] - d[addr1] * a[addr2]) / tmp;
+        }
+    } // проверим
     
     __syncthreads();
     
-    thomas(a, b, c, d, x, group_size, tid); //4
+    thomas(a, b, c, d, x, group_size, tid, stride); //4
     __syncthreads();
     
     // Сохранение результата
     if (tid < group_size) {
-        int idx = bid * stride + tid * stride;
+        int idx = bid + tid * stride;
+        //int idx = bid * stride + tid * stride;
         d_x[idx] = x[tid];
     }                                                  
 }
 
 
 """
-
-
