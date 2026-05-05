@@ -217,12 +217,13 @@ def periodical_sweep_gpu(vec, f, r, N):
     switchPoints = max(0, min(switchPoints, int(np.log2(systemSize))))
 
     stride = 1 << switchPoints
+    group_size = systemSize // stride
 
     # shared = (5 * (systemSize + 1) + 5 * (systemSize // 2)) * 8
     shared = 5 * systemSize * 8
 
     # group_size = N // (2 ** switchPoints)
-    num_groups = 2 ** switchPoints
+    num_groups = stride #2 ** switchPoints
 
     # print(f"shared: {shared}\nswitchPoints:{switchPoints}\ngroup size: {group_size}\nnum_groups: {num_groups}")
     # exit(0)
@@ -231,11 +232,19 @@ def periodical_sweep_gpu(vec, f, r, N):
           np.uint32(systemSize),
           np.uint32(switchPoints),
           np.uint32(stride),
-          grid=(num_groups, 1, 1),
+          grid=(1, 1, 1), #количество подсистем
           block=(systemSize, 1, 1),
           shared=shared)
 
+
+    cuda.Context.synchronize()  # Ждём завершения ядра
+    # print("Kernel finished")
+
+    # try:
     cuda.memcpy_htod(a_gpu, a_sub)
+    # except cuda.LogicError as e:
+    #     print(f"CUDA error: {e}")
+    #     exit(0)
     cuda.memcpy_htod(b_gpu, b_sub)
     cuda.memcpy_htod(c_gpu, c_sub)
 
@@ -243,7 +252,7 @@ def periodical_sweep_gpu(vec, f, r, N):
           np.uint32(systemSize),
           np.uint32(switchPoints),
           np.uint32(stride),
-          grid=(num_groups, 1, 1),
+          grid=(1, 1, 1),
           block=(systemSize, 1, 1),  # blockDim.x = N/2 - в оригинале да, размер системы // 2
           shared=shared)
 
@@ -252,6 +261,7 @@ def periodical_sweep_gpu(vec, f, r, N):
 
     cuda.memcpy_dtoh(p, p_gpu)
     cuda.memcpy_dtoh(q, q_gpu)
+
 
     xn = (f[-1] - v_n_1 @ p) / (c_n - v_n_1 @ q)
 

@@ -41,22 +41,23 @@ def start_compact_sceme(N: int, time_steps: int, *args, **kwargs):
     for t in range(time_steps):
         if t == 0:
             hv, qv, uv = rusanov_scheme_periodical(hu, qu, 0.05, 0.104, N)
-            simple_graphic(hv, x, t)
+            # simple_graphic(hv, x, t)
         else:
             hw, qw, uw = CWA(hv, qv, uv, hu, qu, uu, r, N)
-            simple_graphic(hw, x, t)
             # if snapshot_times is not None and target_time is not None:
             if time_idx < length and t + 1 == snapshot_times[time_idx]:
                 print(t)
                 print(time_idx)
-                np.save(f"./snapshots_GPU/h_T={target_time[time_idx]}_n={N}_const_dt", hw)
-                np.save(f"./snapshots_GPU/q_T={target_time[time_idx]}_n={N}_const_dt", qw)
-                print(f"Snapshot записан: T={target_time[time_idx]}_n={N}_const_dt")
+                simple_graphic(hw, x, t)
+                # np.save(f"./snapshots_GPU/h_T={target_time[time_idx]}_n={N}_const_dt", hw)
+                # np.save(f"./snapshots_GPU/q_T={target_time[time_idx]}_n={N}_const_dt", qw)
+                # print(f"Snapshot записан: T={target_time[time_idx]}_n={N}_const_dt")
                 # trg_time += 1
                 time_idx += 1
 
             hu, qu, uu = hv, qv, uv
             hv, qv, uv = hw, qw, uw
+
 
 
 def check():
@@ -86,6 +87,7 @@ def three_greeds():
     start_compact_sceme(N[0], time_steps[0], snapshot_times_1, T)
     t2 = datetime.now()
     print(f"Count CWA on {N[0]}-dot grid is {t2 - t1}")
+    # exit(0)
 
     t1 = datetime.now()
     print(f"Start compact scheme (GPU) on {N[1]} greed")
